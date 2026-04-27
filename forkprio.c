@@ -9,7 +9,7 @@
 #include <sys/time.h>
 #include <sys/times.h>
 
-enum {
+enum{
     ARG_CHILDREN = 1,
     ARG_SECONDS = 2,
     ARG_LOWER_PRIORITIES = 3,
@@ -25,7 +25,8 @@ enum {
     STRTOL_BASE_10 = 10,
 };
 
-struct forkprio_config {
+struct forkprio_config
+{
     int children;
     int seconds;
     int lower_priorities;
@@ -40,7 +41,8 @@ parse_int_arg(const char *str, int min, int max, int *out_val)
     errno = 0;
     value = strtol(str, &end, STRTOL_BASE_10);
 
-    if (errno != 0 || end == str || *end != '\0' || value < min || value > max) {
+    if (errno != 0 || end == str || *end != '\0' || value < min || value > max)
+    {
         return PARSE_ERR;
     }
 
@@ -51,7 +53,8 @@ parse_int_arg(const char *str, int min, int max, int *out_val)
 static int
 parse_args(int argc, char *argv[], struct forkprio_config *cfg)
 {
-    if (argc != ARGC_EXPECTED) {
+    if (argc != ARGC_EXPECTED)
+    {
         fprintf(stderr,
                 "Usage: %s <children> <seconds> <lower_priorities: 0|1>\n",
                 argv[0]);
@@ -59,19 +62,22 @@ parse_args(int argc, char *argv[], struct forkprio_config *cfg)
     }
 
     if (parse_int_arg(argv[ARG_CHILDREN], MIN_CHILDREN, INT_MAX,
-                      &cfg->children) == PARSE_ERR) {
+                      &cfg->children) == PARSE_ERR)
+    {
         fprintf(stderr, "Invalid children: %s\n", argv[ARG_CHILDREN]);
         return PARSE_ERR;
     }
 
     if (parse_int_arg(argv[ARG_SECONDS], MIN_SECONDS, INT_MAX,
-                      &cfg->seconds) == PARSE_ERR) {
+                      &cfg->seconds) == PARSE_ERR)
+    {
         fprintf(stderr, "Invalid seconds: %s\n", argv[ARG_SECONDS]);
         return PARSE_ERR;
     }
 
     if (parse_int_arg(argv[ARG_LOWER_PRIORITIES], LOWER_PRIORITIES_NO,
-                      LOWER_PRIORITIES_YES, &cfg->lower_priorities) == PARSE_ERR) {
+                      LOWER_PRIORITIES_YES, &cfg->lower_priorities) == PARSE_ERR)
+    {
         fprintf(stderr, "Invalid lower_priorities (must be 0 or 1): %s\n",
                 argv[ARG_LOWER_PRIORITIES]);
         return PARSE_ERR;
@@ -91,21 +97,25 @@ static void sigterm_handler(int signum)
     errno = 0;
     prio = getpriority(PRIO_PROCESS, 0);
 
-    if (getrusage(RUSAGE_SELF, &usage) == 0) {
+    if (getrusage(RUSAGE_SELF, &usage) == 0)
+    {
         total_time = usage.ru_utime.tv_sec + usage.ru_stime.tv_sec;
-    } else {
+    }
+    else
+    {
         total_time = 0;
     }
 
     printf("Child %d (nice %2d):\t%3li\n", getpid(), prio, total_time);
-    
-    _exit(EXIT_SUCCESS);
+
+    exit(EXIT_SUCCESS);
 }
 
 int busywork(void)
 {
     struct tms buf;
-    for (;;) {
+    for (;;)
+    {
         times(&buf);
     }
 }
@@ -116,75 +126,86 @@ int main(int argc, char *argv[])
     pid_t *pids;
     int i;
 
-    if (parse_args(argc, argv, &cfg) < 0) {
+    if (parse_args(argc, argv, &cfg) < 0)
+    {
         exit(EXIT_FAILURE);
     }
 
-    pids = calloc(cfg.children, sizeof(pid_t));
-    if (!pids) {
+    pids = calloc((size_t)cfg.children, sizeof(pid_t));
+    if (!pids)
+    {
         perror("calloc");
         exit(EXIT_FAILURE);
     }
 
-    for (i = 0; i < cfg.children; i++) {
+    for (i = 0; i < cfg.children; i++)
+    {
         pid_t pid = fork();
 
-        if (pid < 0) {
+        if (pid < 0)
+        {
             perror("fork");
-            
+
             int j;
-            for (j = 0; j < i; j++) kill(pids[j], SIGTERM);
-            for (j = 0; j < i; j++) wait(NULL);
-            
+            for (j = 0; j < i; j++)
+                kill(pids[j], SIGTERM);
+            for (j = 0; j < i; j++)
+                wait(NULL);
+
             free(pids);
             exit(EXIT_FAILURE);
         }
 
-        if (pid == 0) {
+        if (pid == 0)
+        {
             struct sigaction sa;
 
             sa.sa_handler = sigterm_handler;
             sigemptyset(&sa.sa_mask);
             sa.sa_flags = 0;
 
-            if (sigaction(SIGTERM, &sa, NULL) == -1) {
+            if (sigaction(SIGTERM, &sa, NULL) == -1)
+            {
                 perror("sigaction");
                 _exit(EXIT_FAILURE);
             }
 
-            if (cfg.lower_priorities == LOWER_PRIORITIES_YES) {
-                if (setpriority(PRIO_PROCESS, 0, i) == -1) {
+            if (cfg.lower_priorities == LOWER_PRIORITIES_YES)
+            {
+                if (setpriority(PRIO_PROCESS, 0, i) == -1)
+                {
                     perror("setpriority");
                 }
             }
 
             busywork();
-            
-            _exit(EXIT_SUCCESS);
-        } else {
+
+            exit(EXIT_SUCCESS);
+        }
+        else
+        {
             pids[i] = pid;
         }
     }
 
-    if (cfg.seconds > 0) {
-        sleep(cfg.seconds);
-    } else {
-        /*
-         *     while (1) {
-         *         pause();
-         *     }
-        */
-        // Temporary precaution: wait 5 seconds then force shutdown.
-        sleep(5);
-        printf("Se cerraron los procesos por precaucion\n");
+    if (cfg.seconds > 0)
+    {
+        sleep((unsigned int)cfg.seconds);
+    }
+    else
+    {
+        while (1)
+            pause();
     }
 
-    for (i = 0; i < cfg.children; i++) {
+    for (i = 0; i < cfg.children; i++)
+    {
         kill(pids[i], SIGTERM);
     }
 
-    for (i = 0; i < cfg.children; i++) {
-        wait(NULL); 
+    for (i = 0; i < cfg.children; i++)
+    {
+        wait(NULL);
     }
 
     free(pids);
