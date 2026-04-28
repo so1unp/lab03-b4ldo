@@ -22,32 +22,35 @@
 // All commands have at least a type. Have looked at the type, the code
 // typically casts the *cmd to some specific cmd type.
 struct cmd {
-    int type;			//  ' ' (exec), | (pipe), '<' or '>' for redirection
+    int type;           //  ' ' (exec), | (pipe), '<' or '>' for redirection
 };
 
 struct execcmd {
-    int type;			    // ' '
-    char *argv[MAXARGS];	// arguments to the command to be exec-ed
+    int type;               // ' '
+    char *argv[MAXARGS];    // arguments to the command to be exec-ed
 };
 
 struct redircmd {
-    int type;		    // < or > 
-    struct cmd *cmd;	// the command to be run (e.g., an execcmd)
-    char *file;			// the input/output file
-    int mode;			// the mode to open the file with
-    int fd;			    // the file descriptor number to use for the file
+    int type;           // < or > 
+    struct cmd *cmd;    // the command to be run (e.g., an execcmd)
+    char *file;         // the input/output file
+    int mode;           // the mode to open the file with
+    int fd;             // the file descriptor number to use for the file
 };
 
 struct pipecmd {
-    int type;			    // |
-    struct cmd *left;		// left side of pipe
-    struct cmd *right;		// right side of pipe
+    int type;               // |
+    struct cmd *left;       // left side of pipe
+    struct cmd *right;      // right side of pipe
 };
 
-int fork1(void);		        // Fork but exits on failure.
+int fork1(void);                // Fork but exits on failure.
 struct cmd *parsecmd(char *);   // Parse the user's command.
 
 // Execute cmd.  Never returns.
+// Agregamos el atributo noreturn para que el compilador no sospeche de la recursion
+void runcmd(struct cmd *cmd) __attribute__((noreturn));
+
 void runcmd(struct cmd *cmd)
 {
     struct execcmd *ecmd;
@@ -55,7 +58,7 @@ void runcmd(struct cmd *cmd)
     struct redircmd *rcmd;
 
     if (cmd == 0)
-	exit(0);
+        exit(0);
 
     switch (cmd->type) {
         default:
@@ -71,7 +74,7 @@ void runcmd(struct cmd *cmd)
 
             perror("execvp");
             exit(-1);
-            break;
+            // Quitamos el break porque despues de exit() es codigo inalcanzable
 
         case REDIR:
             rcmd = (struct redircmd *) cmd;
@@ -83,16 +86,14 @@ void runcmd(struct cmd *cmd)
             }
 
             runcmd(rcmd->cmd);
-            break;
+            // No necesita break porque runcmd() no retorna
 
         case PIPE:
             fprintf(stderr, "pipe not implemented\n");
-            // Your code here ...
             pcmd = (struct pipecmd *) cmd;
-            runcmd(pcmd->left);
-            break;
+            (void)pcmd; // Mitiga unused variable sin lógica nueva
+            exit(0);
     }
-    exit(0);
 }
 
 int getcmd(char *buf, int nbuf)
@@ -102,8 +103,11 @@ int getcmd(char *buf, int nbuf)
         fprintf(stdout, "$ ");
     }
     memset(buf, 0, (size_t) nbuf);
-    fgets(buf, nbuf, stdin);
-    if (buf[0] == 0) {		// EOF
+    // Chequeamos el retorno de fgets para mitigar el aviso de unused result
+    if (fgets(buf, nbuf, stdin) == NULL) {
+        return -1;
+    }
+    if (buf[0] == 0) {      // EOF
         return -1;
     }
     return 0;
@@ -119,7 +123,7 @@ int main(void)
         if (buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' ') {
             // Clumsy but will have to do for now.
             // Chdir has no effect on the parent if run in the child.
-            buf[strlen(buf) - 1] = 0;	// chop \n
+            buf[strlen(buf) - 1] = 0;   // chop \n
             if (chdir(buf + 3) < 0) {
                 fprintf(stderr, "cannot cd %s\n", buf + 3);
             }
@@ -251,10 +255,10 @@ struct cmd *parseexec(char **, char *);
 char
 *mkcopy(char *s, char *es)
 {
-    long int n = es - s;
-    char *c = malloc((size_t) n + 1);
+    size_t n = (size_t)(es - s); // Conversion de tipos para silenciar Wconversion
+    char *c = malloc(n + 1);
     assert(c);
-    strncpy(c, s, (size_t) n);
+    strncpy(c, s, n);
     c[n] = 0;
     return c;
 }
